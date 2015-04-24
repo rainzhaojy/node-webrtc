@@ -1,0 +1,214 @@
+<html>
+<head>
+    <title>Demo WebRTC</title>
+    <style>
+        div.video {
+            border-style: solid;
+            border-width: 1px;
+        }
+    </style>
+    <script src='browserutil.js'></script>
+    <script src="pan.logger.js"></script>
+</head>
+
+<body>
+<div class="video">
+    <video id="localVideo" width="320" height="240" autoplay muted></video>
+    <video id="remoteVideo" width="320" height="240" autoplay muted></video>
+</div>
+</body>
+
+<script>
+
+    var logger = new pan.Logger();
+
+    var host = window.location.host.split(':')[0];
+    var bridge = window.location.toString().split('?')[1] || host + ':9001';
+
+    var pendingCandidates = [], ws = null, pc = null;
+
+    //***********************************************************
+    var localStream;
+    var localVideo = document.getElementById("localVideo");
+    var remoteVideo = document.getElementById("remoteVideo");
+
+    //var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
+    //var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
+    // Set up audio and video regardless of what devices are present.
+    var sdpConstraints = {
+        'mandatory': {
+            'OfferToReceiveAudio': true,
+            'OfferToReceiveVideo': true
+        }
+    };
+
+    function start() {
+        logger.log("Requesting local stream");
+        getUserMedia({audio: true, video: true}, gotStream, doHandleError);
+        logger.log("start: done");
+    }
+
+    function gotStream(stream) {
+        logger.log("gotStream: Received local stream");
+        localVideo.src = window.URL.createObjectURL(stream);
+        localStream = stream;
+        createPeerConnection();
+        logger.log("gotStream: done");
+    }
+
+    function createPeerConnection() {
+        logger.log("createPeerConnection: Creating peer connection");
+        if (localStream.getVideoTracks().length > 0) {
+            logger.log('createPeerConnection: Using video device: ' + localStream.getVideoTracks()[0].label);
+        }
+        if (localStream.getAudioTracks().length > 0) {
+            logger.log('createPeerConnection: Using audio device: ' + localStream.getAudioTracks()[0].label);
+        }
+
+        pc = new RTCPeerConnection(
+                {
+                    iceServers: [{url:'stun:stun.l.google.com:19302'}]
+                },
+                {
+                    'optional': []
+                }
+        );
+
+        //peer connection events
+        pc.onicecandidate = gotLocalIceCandidate;
+        pc.onaddstream = gotRemoteStream;
+        pc.onsignalingstatechange = function(event) {
+            logger.info("signaling state change: ", event.target.signalingState);
+        };
+        pc.oniceconnectionstatechange = function(event) {
+            logger.info("ice connection state change: ", event.target.iceConnectionState);
+        };
+        pc.onicegatheringstatechange = function(event) {
+            logger.info("ice gathering state change: ", event.target.iceGatheringState);
+        };
+
+        logger.log("createPeerConnection: Created peer connection");
+        pc.addStream(localStream);
+        logger.log("createPeerConnection: done, start offer...");
+
+        doOffer();
+    }
+
+    function doOffer() {
+        logger.log("doOffer: creating offer");
+        pc.createOffer(gotOffer, doHandleError);
+        logger.log("doOffer: done");
+    }
+
+    function gotOffer(desc) {
+        logger.log('got local offer, call setLocalDescription');
+        pc.setLocalDescription(
+                new RTCSessionDescription(desc),
+                doSendOffer.bind(undefined, desc),
+                doHandleError
+        );
+    }
+
+    function doAnswer() {
+        logger.log("doAnswer: creating answer");
+        pc.createAnswer(gotAnswer, doHandleError, sdpConstraints);
+        logger.log("doAnswer: created answer");
+    }
+
+    function gotAnswer(description) {
+        logger.log("gotAnswer: got the answer");
+        pc.setLocalDescription(description);
+        var msg = {messageType: description.type, sdp: description.sdp};
+        var msgStr = JSON.stringify(msg);
+        sendMessage(msgStr);
+    }
+
+    function gotRemoteStream(event) {
+        logger.log("gotRemoteStream: Received remote stream");
+        remoteVideo.src = URL.createObjectURL(event.stream);
+    }
+
+    function gotLocalIceCandidate(event) {
+        var candidate = event.candidate;
+        logger.log('gotLocalIceCandidate:', candidate);
+        if(!candidate) return;
+        if(WebSocket.OPEN == ws.readyState)
+        {
+            ws.send(JSON.stringify(
+                {
+                    'type': 'ice',
+                    'sdp': {'candidate': candidate.candidate, 'sdpMid': candidate.sdpMid, 'sdpMLineIndex': candidate.sdpMLineIndex}
+                })
+            );
+        } else {
+            logger.log('cache the candidate');
+            pendingCandidates.push(candidate);
+        }
+    }
+    //*****************************************************************************
+
+    function doHandleError(error)
+    {
+        logger.error('ERROR', error);
+    }
+
+    function doSendOffer(offer) {
+        logger.log('Creating websocket connection to send offer');
+        ws = new WebSocket("ws://" + bridge);
+        ws.onopen = function() {
+            logger.log('websocket connected');
+
+            ws.send(JSON.stringify(
+                {'type': offer.type, 'sdp': offer.sdp})
+            );
+
+            logger.log('send pending ice candidates:', pendingCandidates.length);
+            pendingCandidates.forEach(function(candidate) {
+                ws.send(JSON.stringify(
+                                {
+                                    'type': 'ice',
+                                    'sdp': {'candidate': candidate.candidate, 'sdpMid': candidate.sdpMid, 'sdpMLineIndex': candidate.sdpMLineIndex}
+                                })
+                );
+            });
+        };
+        ws.onmessage = function(event) {
+            logger.log('Received:', event.data);
+
+            data = JSON.parse(event.data);
+            if('answer' == data.type) {
+                doSetRemoteDesc(data);
+            } else if('ice' == data.type) {
+                if(data.sdp.candidate) {
+                    var candidate = new RTCIceCandidate(data.sdp.candidate);
+                    pc.addIceCandidate(candidate, handleAddIceCandidateSuccess, handleAddIceCandidateError);
+                }
+            }
+        };
+    }
+
+    function handleAddIceCandidateSuccess() {
+        logger.log('add ice candidate success');
+    }
+
+    function handleAddIceCandidateError() {
+        logger.log('add ice candidate fail');
+    }
+
+    function doSetRemoteDesc(desc)
+    {
+        logger.log('setting remote sdp');
+        pc.setRemoteDescription(
+                new RTCSessionDescription(desc),
+                function(){
+                    logger.log("set remote sdp success");
+                },
+                doHandleError
+        );
+    }
+
+    start();
+
+</script>
+
+</html>
