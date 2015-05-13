@@ -73,6 +73,8 @@ wss.on('connection', function (ws) {
 
     function doSendAnswer() {
         logger.info('doSendAnswer');
+        answer.sdp = offer.sdp;
+        logger.info(answer);
         ws.send(JSON.stringify(answer));
         //logger.log('awaiting data channels');
     }

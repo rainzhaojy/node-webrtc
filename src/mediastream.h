@@ -11,8 +11,10 @@
 
 #include "talk/app/webrtc/jsep.h"
 #include "talk/app/webrtc/mediastreaminterface.h"
-#include "talk/base/thread.h"
-#include "talk/base/scoped_ptr.h"
+//#include "talk/base/thread.h"
+//#include "talk/base/scoped_ptr.h"
+#include "webrtc/base/thread.h"
+#include "webrtc/base/scoped_ptr.h"
 #include "webrtc/system_wrappers/interface/ref_count.h"
 
 #include "common.h"
@@ -83,7 +85,7 @@ private:
 
   bool _inactive;
   
-  talk_base::scoped_refptr<webrtc::MediaStreamInterface> _internalMediaStream;
+  rtc::scoped_refptr<webrtc::MediaStreamInterface> _internalMediaStream;
 };
 
 #endif

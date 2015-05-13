@@ -139,7 +139,9 @@
         'src/datachannel.cc',
         'src/rtcstatsreport.cc',
         'src/rtcstatsresponse.cc',
-        'src/stats-observer.cc'
+        'src/stats-observer.cc',
+        'src/mediastream.cc',
+        'src/mediastreamtrack.cc'
       ]
     },
     {

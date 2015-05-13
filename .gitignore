@@ -5,3 +5,4 @@ third_party
 npm-debug.log
 lib/binding
 build.log
+.idea
