@@ -18,7 +18,7 @@ var host = args.h || '127.0.0.1';
 var port = args.p || 8080;
 var socketPort = args.ws || 9001;
 
-var file = new static.Server('./examples', {
+var file = new static.Server('./examples-rain', {
     alias: {
         match: '/dist/wrtc.js',
         serve: '../dist/wrtc.js',
@@ -49,6 +49,7 @@ wss.on('connection', function (ws) {
     function doCreateAnswer() {
         logger.info('doCreateAnswer');
         remoteReceived = true;
+        logger.log("add cached ice candidate:", pendingCandidates.length);
         pendingCandidates.forEach(function (candidate) {
             if (candidate.sdp) {
                 pc.addIceCandidate(new webrtc.RTCIceCandidate(candidate.sdp));
@@ -104,15 +105,6 @@ wss.on('connection', function (ws) {
                 'optional': [{DtlsSrtpKeyAgreement: false}]
             }
         );
-        pc.onsignalingstatechange = function (state) {
-            logger.info('signaling state change:', state);
-        };
-        pc.oniceconnectionstatechange = function (state) {
-            logger.info('ice connection state change:', state);
-        };
-        pc.onicegatheringstatechange = function (state) {
-            logger.info('ice gathering state change:', state);
-        };
         pc.onicecandidate = function (candidate) {
             ws.send(JSON.stringify(
                     {
@@ -126,6 +118,34 @@ wss.on('connection', function (ws) {
             );
         };
         pc.onaddstream = gotRemoteStream;
+
+        pc.ondatachannel = function(ev){
+            logger.log('---------- ondatachannel');
+        };
+        pc.oniceconnectionstatechange = function(ev){
+            logger.log('---------- oniceconnectionstatechange:', pc.iceConnectionState);
+        };
+        pc.onidentityresult = function(ev){
+            logger.log('---------- onidentityresult');
+        };
+        pc.onidpassertionerror = function(ev){
+            logger.log('---------- onidpassertionerror');
+        };
+        pc.onidpvalidationerror = function(ev){
+            logger.log('---------- onidpvalidationerror');
+        };
+        pc.onnegotiationneeded = function(ev){
+            logger.log('---------- onnegotiationneeded');
+        };
+        pc.onpeeridentity = function(ev){
+            logger.log('---------- onpeeridentity');
+        };
+        pc.onremovestream = function(ev){
+            logger.log('---------- onremovestream');
+        };
+        pc.onsignalingstatechange = function(ev){
+            logger.log('---------- onsignalingstatechange:', pc.signalingState);
+        };
 
         logger.log("createPeerConnection: Created peer connection");
         //pc.addStream(localStream);
@@ -146,10 +166,12 @@ wss.on('connection', function (ws) {
             doSetRemoteDesc();
         } else if ('ice' == data.type) {
             if (remoteReceived) {
+                logger.log("add ice candidate");
                 if (data.sdp.candidate) {
                     pc.addIceCandidate(new webrtc.RTCIceCandidate(data.sdp.candidate));
                 }
             } else {
+                logger.log("cache ice candidate");
                 pendingCandidates.push(data);
             }
         }
