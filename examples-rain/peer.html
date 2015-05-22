@@ -58,33 +58,37 @@
 
     function createPeerConnection() {
         logger.log("createPeerConnection: Creating peer connection");
-        if (localStream.getVideoTracks().length > 0) {
-            logger.log('createPeerConnection: Using video device: ' + localStream.getVideoTracks()[0].label);
-        }
-        if (localStream.getAudioTracks().length > 0) {
-            logger.log('createPeerConnection: Using audio device: ' + localStream.getAudioTracks()[0].label);
-        }
-
-        pc = new RTCPeerConnection(
-                {
-                    iceServers: [{url:'stun:stun.l.google.com:19302'}]
-                },
-                {
-                    'optional': []
-                }
-        );
+        pc = new RTCPeerConnection(null);
 
         //peer connection events
         pc.onicecandidate = gotLocalIceCandidate;
         pc.onaddstream = gotRemoteStream;
-        pc.onsignalingstatechange = function(event) {
-            logger.info("signaling state change: ", event.target.signalingState);
+        pc.ondatachannel = function(ev){
+            logger.log('---------- ondatachannel');
         };
-        pc.oniceconnectionstatechange = function(event) {
-            logger.info("ice connection state change: ", event.target.iceConnectionState);
+        pc.oniceconnectionstatechange = function(ev){
+            logger.log('---------- oniceconnectionstatechange:', ev.target.iceConnectionState);
         };
-        pc.onicegatheringstatechange = function(event) {
-            logger.info("ice gathering state change: ", event.target.iceGatheringState);
+        pc.onidentityresult = function(ev){
+            logger.log('---------- onidentityresult');
+        };
+        pc.onidpassertionerror = function(ev){
+            logger.log('---------- onidpassertionerror');
+        };
+        pc.onidpvalidationerror = function(ev){
+            logger.log('---------- onidpvalidationerror');
+        };
+        pc.onnegotiationneeded = function(ev){
+            logger.log('---------- onnegotiationneeded', ev.target);
+        };
+        pc.onpeeridentity = function(ev){
+            logger.log('---------- onpeeridentity');
+        };
+        pc.onremovestream = function(ev){
+            logger.log('---------- onremovestream');
+        };
+        pc.onsignalingstatechange = function(ev){
+            logger.log('---------- onsignalingstatechange:', ev.target.signalingState);
         };
 
         logger.log("createPeerConnection: Created peer connection");
@@ -112,7 +116,6 @@
     function doAnswer() {
         logger.log("doAnswer: creating answer");
         pc.createAnswer(gotAnswer, doHandleError, sdpConstraints);
-        logger.log("doAnswer: created answer");
     }
 
     function gotAnswer(description) {
@@ -147,8 +150,7 @@
     }
     //*****************************************************************************
 
-    function doHandleError(error)
-    {
+    function doHandleError(error) {
         logger.error('ERROR', error);
     }
 
@@ -195,8 +197,7 @@
         logger.log('add ice candidate fail');
     }
 
-    function doSetRemoteDesc(desc)
-    {
+    function doSetRemoteDesc(desc) {
         logger.log('setting remote sdp');
         pc.setRemoteDescription(
                 new RTCSessionDescription(desc),

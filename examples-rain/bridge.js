@@ -55,16 +55,30 @@ wss.on('connection', function (ws) {
                 pc.addIceCandidate(new webrtc.RTCIceCandidate(candidate.sdp));
             }
         });
-        pc.createAnswer(
-            doSetLocalDesc,
-            doHandleError
-        );
+        var constraints = {
+            mandatory: {
+                OfferToReceiveAudio: true,
+                OfferToReceiveVideo: false
+            }
+        };
+        pc.createAnswer(doSetLocalDesc, doHandleError, constraints);
     }
 
     function doSetLocalDesc(desc) {
         logger.info('doSetLocalDesc');
-        answer = desc;
         logger.info(desc);
+        var sdp = desc.sdp;
+
+        //rain: replace m=setup
+        //sdp = sdp.replace(/a=setup:actpass/g, "a=setup:passive");
+        //desc.sdp = sdp;
+        //logger.info(desc);
+
+        //rain: use offer sdp as answer sdp
+        sdp = offer.sdp;
+        sdp = sdp.replace(/a=setup:actpass/g, "a=setup:active");
+
+        answer = {type:'answer', sdp:sdp};
         pc.setLocalDescription(
             desc,
             doSendAnswer,
@@ -74,8 +88,8 @@ wss.on('connection', function (ws) {
 
     function doSendAnswer() {
         logger.info('doSendAnswer');
-        answer.sdp = offer.sdp;
-        logger.info(answer);
+        //answer.sdp = offer.sdp;
+        //logger.info(answer);
         ws.send(JSON.stringify(answer));
         //logger.log('awaiting data channels');
     }
@@ -89,9 +103,21 @@ wss.on('connection', function (ws) {
         );
     }
 
+    var remoteStream;
     function gotRemoteStream(event) {
         logger.log("gotRemoteStream: Received remote stream");
         //remoteVideo.src = URL.createObjectURL(event.stream);
+        remoteStream = event.stream;
+
+        setTimeout(function(){
+            loopbackMedia();
+        }, 1000);
+    }
+
+    function loopbackMedia() {
+        logger.log('loopback the media:', remoteStream ? "remote stream ok" : "remote stream null");
+        //pc.addStream(remoteStream);
+        //doOffer(offerId);
     }
 
     function createPeerConnection() {
@@ -148,8 +174,9 @@ wss.on('connection', function (ws) {
         };
 
         logger.log("createPeerConnection: Created peer connection");
+        var mockStream = new webrtc.RTCMediaStream({});
         //pc.addStream(localStream);
-        //logger.log("createPeerConnection: done, start offer...");
+        logger.log("createPeerConnection: done");
 
     }
 
